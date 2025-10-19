@@ -1,11 +1,11 @@
-variable "password" {
-  description = "Password for Neo4j database"
+variable "password_secret_arn" {
+  description = "ARN of the AWS Secrets Manager secret containing the Neo4j password. The secret must be a plain text string (not JSON) with minimum 8 characters."
   type        = string
   sensitive   = true
 
   validation {
-    condition     = length(var.password) >= 8
-    error_message = "Password must be at least 8 characters long."
+    condition     = can(regex("^arn:aws:secretsmanager:[a-z0-9-]+:[0-9]+:secret:", var.password_secret_arn))
+    error_message = "Must be a valid AWS Secrets Manager ARN (format: arn:aws:secretsmanager:region:account:secret:name)."
   }
 }
 

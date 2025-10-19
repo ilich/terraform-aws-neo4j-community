@@ -19,15 +19,47 @@ Neo4j recommended system requirements: https://neo4j.com/docs/operations-manual/
 - Cypher IP blocklist configured for internal network protection
 - Optional automated daily EBS snapshots with configurable retention
 
+## Prerequisites
+
+### AWS Secrets Manager Secret
+
+Before deploying the module, create a secret in AWS Secrets Manager to store your Neo4j password:
+
+**Using AWS CLI:**
+```bash
+aws secretsmanager create-secret \
+  --name neo4j-password \
+  --description "Neo4j database password" \
+  --secret-string "YourSecurePassword123"
+```
+
+**Using Terraform:**
+```hcl
+resource "aws_secretsmanager_secret" "neo4j_password" {
+  name        = "neo4j-password"
+  description = "Neo4j database password"
+}
+
+resource "aws_secretsmanager_secret_version" "neo4j_password" {
+  secret_id     = aws_secretsmanager_secret.neo4j_password.id
+  secret_string = "YourSecurePassword123"  # Minimum 8 characters
+}
+```
+
+**Important Notes:**
+- The secret must contain a **plain text string** (not JSON)
+- Password must be at least **8 characters** long
+- The secret must be in the same region as your Neo4j deployment (or specify the region explicitly)
+
 ## Usage
 
 ```hcl
 module "neo4j" {
   source = "github.com/ilich/terraform-aws-neo4j-community"
 
-  password  = "your-secure-password"
-  vpc_id    = "vpc-xxxxx"
-  subnet_id = "subnet-xxxxx"
+  password_secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:neo4j-password-xxxxx"
+  vpc_id              = "vpc-xxxxx"
+  subnet_id           = "subnet-xxxxx"
 
   # Optional variables
   instance_type           = "t3.medium"
@@ -38,6 +70,26 @@ module "neo4j" {
     Environment = "dev"
     Project     = "my-project"
   }
+}
+```
+
+**Using with Terraform-managed secret:**
+```hcl
+resource "aws_secretsmanager_secret" "neo4j_password" {
+  name = "neo4j-password"
+}
+
+resource "aws_secretsmanager_secret_version" "neo4j_password" {
+  secret_id     = aws_secretsmanager_secret.neo4j_password.id
+  secret_string = var.neo4j_password
+}
+
+module "neo4j" {
+  source = "github.com/ilich/terraform-aws-neo4j-community"
+
+  password_secret_arn = aws_secretsmanager_secret.neo4j_password.arn
+  vpc_id              = "vpc-xxxxx"
+  subnet_id           = "subnet-xxxxx"
 }
 ```
 
@@ -58,7 +110,7 @@ module "neo4j" {
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| password | Password for Neo4j database (minimum 8 characters) | `string` | n/a | yes |
+| password_secret_arn | ARN of AWS Secrets Manager secret containing Neo4j password (plain text, minimum 8 characters) | `string` | n/a | yes |
 | vpc_id | VPC ID to use for Neo4j | `string` | n/a | yes |
 | subnet_id | Subnet ID to use for Neo4j | `string` | n/a | yes |
 | instance_type | EC2 instance type | `string` | `"r6i.large"` | no |
@@ -79,16 +131,26 @@ module "neo4j" {
 ## Example Deployment
 
 ```bash
+# Create the secret first
+aws secretsmanager create-secret \
+  --name neo4j-password \
+  --secret-string "YourSecurePassword123"
+
+# Get the secret ARN
+SECRET_ARN=$(aws secretsmanager describe-secret --secret-id neo4j-password --query ARN --output text)
+
 # Initialize Terraform
 terraform init
 
 # Review the plan
-terraform plan -var="password=YourSecurePassword123" \
+terraform plan \
+  -var="password_secret_arn=$SECRET_ARN" \
   -var="vpc_id=vpc-xxxxx" \
   -var="subnet_id=subnet-xxxxx"
 
 # Apply the configuration
-terraform apply -var="password=YourSecurePassword123" \
+terraform apply \
+  -var="password_secret_arn=$SECRET_ARN" \
   -var="vpc_id=vpc-xxxxx" \
   -var="subnet_id=subnet-xxxxx"
 ```
@@ -96,11 +158,11 @@ terraform apply -var="password=YourSecurePassword123" \
 Alternatively, create a `terraform.tfvars` file:
 
 ```hcl
-password      = "YourSecurePassword123"
-vpc_id        = "vpc-xxxxx"
-subnet_id     = "subnet-xxxxx"
-instance_type = "t3.large"
-disk_size     = 50
+password_secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:neo4j-password-xxxxx"
+vpc_id              = "vpc-xxxxx"
+subnet_id           = "subnet-xxxxx"
+instance_type       = "t3.large"
+disk_size           = 50
 
 tags = {
   Environment = "production"
@@ -131,7 +193,7 @@ terraform output neo4j_uri
 
 Default credentials:
 - Username: `neo4j`
-- Password: The password you provided in the `password` variable
+- Password: The password stored in your AWS Secrets Manager secret
 
 ### Instance Console Access via SSM Session Manager
 
@@ -173,7 +235,7 @@ Set the `snapshot_retention_days` parameter to a value greater than 0:
 module "neo4j" {
   source = "github.com/ilich/terraform-aws-neo4j-community"
 
-  password                = "your-secure-password"
+  password_secret_arn     = "arn:aws:secretsmanager:us-east-1:123456789012:secret:neo4j-password-xxxxx"
   vpc_id                  = "vpc-xxxxx"
   subnet_id               = "subnet-xxxxx"
   snapshot_retention_days = 30  # Keep daily snapshots for 30 days
@@ -196,9 +258,9 @@ Set `snapshot_retention_days = 0` (default) or omit the parameter entirely:
 module "neo4j" {
   source = "github.com/ilich/terraform-aws-neo4j-community"
 
-  password  = "your-secure-password"
-  vpc_id    = "vpc-xxxxx"
-  subnet_id = "subnet-xxxxx"
+  password_secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:neo4j-password-xxxxx"
+  vpc_id              = "vpc-xxxxx"
+  subnet_id           = "subnet-xxxxx"
   # snapshot_retention_days = 0  # Default - snapshots disabled
 }
 ```
@@ -213,9 +275,15 @@ module "neo4j" {
 
 1. **Instance Access**: No SSH access - uses AWS Systems Manager Session Manager for secure console access
 2. **Neo4j Ports**: Ports 7474 and 7687 are open to 0.0.0.0/0 by default. Consider restricting to specific IP ranges by modifying the security group
-3. **Password**: Use a strong password (minimum 8 characters) and store it securely (e.g., in AWS Secrets Manager)
+3. **Password Management**:
+   - Password is stored in AWS Secrets Manager (never in Terraform state)
+   - Must be at least 8 characters long
+   - EC2 instance fetches password at boot time using IAM role
+   - Secrets Manager secret must be in the same region as deployment
 4. **Encryption**: EBS volumes are encrypted by default using AWS-managed keys
-5. **IAM Permissions**: The instance has minimal IAM permissions (only SSM access via AmazonSSMManagedInstanceCore policy)
+5. **IAM Permissions**: The instance has minimal IAM permissions:
+   - SSM access via AmazonSSMManagedInstanceCore policy
+   - Read-only access to the specific Secrets Manager secret (secretsmanager:GetSecretValue)
 6. **Cypher Security**: Internal network IP blocklist is configured to prevent SSRF attacks via Cypher queries
 7. **AMI**: Uses Amazon Linux 2023 AMI (al2023-ami-2023.9.20250929.0-kernel-6.1-x86_64) with lifecycle policy to ignore AMI changes
 

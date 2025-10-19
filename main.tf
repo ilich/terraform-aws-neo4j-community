@@ -6,7 +6,19 @@ locals {
     set -euo pipefail
     echo Running startup script...
 
-    password="${var.password}"
+    # Fetch password from AWS Secrets Manager
+    echo "Fetching password from Secrets Manager..."
+    password=$(aws secretsmanager get-secret-value --secret-id "${var.password_secret_arn}" --region "${local.region}" --query SecretString --output text)
+
+    if [ -z "$password" ]; then
+      echo "ERROR: Failed to retrieve password from Secrets Manager"
+      exit 1
+    fi
+
+    if [ $${#password} -lt 8 ]; then
+      echo "ERROR: Password must be at least 8 characters long"
+      exit 1
+    fi
 
     cat <<EOFR > /etc/yum.repos.d/neo4j.repo
     [neo4j]
@@ -137,6 +149,24 @@ resource "aws_iam_role" "neo4j_ssm" {
 resource "aws_iam_role_policy_attachment" "neo4j_ssm" {
   role       = aws_iam_role.neo4j_ssm.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy" "neo4j_secrets_manager" {
+  name = "neo4j-secrets-manager-access"
+  role = aws_iam_role.neo4j_ssm.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = var.password_secret_arn
+      }
+    ]
+  })
 }
 
 resource "aws_iam_instance_profile" "neo4j" {
