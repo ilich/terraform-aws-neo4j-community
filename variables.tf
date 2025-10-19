@@ -57,3 +57,14 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "snapshot_retention_days" {
+  description = "Number of days to retain daily EBS snapshots. Set to 0 to disable snapshots. If > 0, daily snapshots will be created and retained for the specified number of days."
+  type        = number
+  default     = 0
+
+  validation {
+    condition     = var.snapshot_retention_days >= 0
+    error_message = "Snapshot retention days must be a non-negative number. Set to 0 to disable snapshots."
+  }
+}

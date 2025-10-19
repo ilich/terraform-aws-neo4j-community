@@ -193,6 +193,12 @@ resource "aws_instance" "neo4j" {
     volume_type           = "gp3"
     encrypted             = true
     delete_on_termination = true
+    tags = var.snapshot_retention_days > 0 ? merge(
+      var.tags,
+      {
+        "neo4j-snapshot" = "true"
+      }
+    ) : var.tags
   }
 
   user_data = local.user_data
@@ -202,4 +208,97 @@ resource "aws_instance" "neo4j" {
   lifecycle {
     ignore_changes = [ami]
   }
+}
+
+resource "aws_iam_role" "dlm_lifecycle_role" {
+  count       = var.snapshot_retention_days > 0 ? 1 : 0
+  name_prefix = "neo4j-dlm-lifecycle-"
+  description = "IAM role for Data Lifecycle Manager to manage Neo4j EBS snapshots"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "dlm.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy" "dlm_lifecycle" {
+  count = var.snapshot_retention_days > 0 ? 1 : 0
+  name  = "neo4j-dlm-lifecycle-policy"
+  role  = aws_iam_role.dlm_lifecycle_role[0].id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateSnapshot",
+          "ec2:CreateSnapshots",
+          "ec2:DeleteSnapshot",
+          "ec2:DescribeVolumes",
+          "ec2:DescribeInstances",
+          "ec2:DescribeSnapshots"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateTags"
+        ]
+        Resource = "arn:aws:ec2:*::snapshot/*"
+      }
+    ]
+  })
+}
+
+resource "aws_dlm_lifecycle_policy" "neo4j_snapshots" {
+  count              = var.snapshot_retention_days > 0 ? 1 : 0
+  description        = "Daily snapshots for Neo4j EBS volumes with ${var.snapshot_retention_days} day retention"
+  execution_role_arn = aws_iam_role.dlm_lifecycle_role[0].arn
+  state              = "ENABLED"
+
+  policy_details {
+    resource_types = ["VOLUME"]
+
+    schedule {
+      name = "Daily Neo4j snapshots"
+
+      create_rule {
+        interval      = 24
+        interval_unit = "HOURS"
+        times         = ["03:00"]
+      }
+
+      retain_rule {
+        count = var.snapshot_retention_days
+      }
+
+      tags_to_add = merge(
+        var.tags,
+        {
+          "SnapshotType" = "DLM"
+          "Service"      = "Neo4j"
+        }
+      )
+
+      copy_tags = true
+    }
+
+    target_tags = {
+      "neo4j-snapshot" = "true"
+    }
+  }
+
+  tags = var.tags
 }
