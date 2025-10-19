@@ -93,6 +93,8 @@ module "neo4j" {
 }
 ```
 
+For a complete working example including VPC setup, see [examples/complete](./examples/complete).
+
 ## Requirements
 
 | Name | Version |

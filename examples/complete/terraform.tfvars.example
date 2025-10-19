@@ -1,0 +1,34 @@
+# Copy this file to terraform.tfvars and customize the values
+
+# Required: Neo4j database password (minimum 8 characters)
+neo4j_password = "ChangeMe123!"
+
+# Optional: AWS region for deployment
+region = "us-east-1"
+
+# Optional: Prefix for resource names
+name_prefix = "neo4j-example"
+
+# Optional: EC2 instance type
+# r6i.large  = 2 vCPU, 16 GB RAM (recommended for production)
+# r6i.xlarge = 4 vCPU, 32 GB RAM (for larger workloads)
+# t3.medium  = 2 vCPU, 4 GB RAM  (for development/testing)
+instance_type = "r6i.large"
+
+# Optional: EBS volume size in GB
+disk_size = 20
+
+# Optional: Number of days to retain daily EBS snapshots (0 to disable)
+snapshot_retention_days = 7
+
+# Optional: Additional tags to apply to all resources
+tags = {
+  Environment = "demo"
+  Project     = "neo4j-test"
+  ManagedBy   = "terraform"
+  Owner       = "your-name"
+}
+
+vpc_id = "vpc-0000cadd0a000b0e0"
+
+subnet_id = "subnet-00000dfe000f00f0e"
