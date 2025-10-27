@@ -186,7 +186,7 @@ resource "aws_security_group" "neo4j" {
     from_port   = 7474
     to_port     = 7474
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.allowed_cidr_blocks
   }
 
   ingress {
@@ -194,7 +194,7 @@ resource "aws_security_group" "neo4j" {
     from_port   = 7687
     to_port     = 7687
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.allowed_cidr_blocks
   }
 
   egress {

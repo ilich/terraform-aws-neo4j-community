@@ -65,6 +65,7 @@ module "neo4j" {
   instance_type           = "t3.medium"
   disk_size              = 20
   snapshot_retention_days = 7  # Enable daily snapshots, retain for 7 days
+  allowed_cidr_blocks     = ["10.0.0.0/8"]  # Restrict access to internal network
 
   tags = {
     Environment = "dev"
@@ -119,6 +120,7 @@ For a complete working example including VPC setup, see [examples/complete](./ex
 | disk_size | Size in GB of the EBS volume (minimum 10) | `number` | `20` | no |
 | region | AWS region for deployment | `string` | `null` (uses current region) | no |
 | snapshot_retention_days | Number of days to retain daily EBS snapshots. Set to 0 to disable snapshots. | `number` | `0` | no |
+| allowed_cidr_blocks | List of CIDR blocks allowed to access Neo4j ports (7474 and 7687) | `list(string)` | `["0.0.0.0/0"]` | no |
 | tags | Additional tags to apply to resources | `map(string)` | `{}` | no |
 
 ## Outputs
@@ -276,7 +278,7 @@ module "neo4j" {
 ## Security Considerations
 
 1. **Instance Access**: No SSH access - uses AWS Systems Manager Session Manager for secure console access
-2. **Neo4j Ports**: Ports 7474 and 7687 are open to 0.0.0.0/0 by default. Consider restricting to specific IP ranges by modifying the security group
+2. **Neo4j Ports**: Ports 7474 and 7687 are open to 0.0.0.0/0 by default. Restrict access to specific IP ranges using the `allowed_cidr_blocks` variable for production deployments
 3. **Password Management**:
    - Password is stored in AWS Secrets Manager (never in Terraform state)
    - Must be at least 8 characters long

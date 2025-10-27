@@ -68,3 +68,14 @@ variable "snapshot_retention_days" {
     error_message = "Snapshot retention days must be a non-negative number. Set to 0 to disable snapshots."
   }
 }
+
+variable "allowed_cidr_blocks" {
+  description = "List of CIDR blocks allowed to access Neo4j ports (7474 and 7687). Defaults to open access from anywhere."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
+
+  validation {
+    condition     = length(var.allowed_cidr_blocks) > 0
+    error_message = "At least one CIDR block must be specified."
+  }
+}
